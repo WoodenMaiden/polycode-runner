@@ -28,16 +28,16 @@ app.use(cors())
 app.get('/', jsonparse, checkDTO, async (req, res) => {
     const BODY: ExerciseDTO = req.body
     try {
-        //volume containing all necessary files such as the input, libraries, cragofiles etc
+
         const docker = new Dockerode();
         const mountname = randomUUID()
         const containername = randomUUID()
 
-        // volume.
+        //we will bind mount the container to /tmp/runners/[its_id_generated_by_UUID]
         await mkdir(`${HOME_MOUNTS}/${mountname}`)
         await writeFile(`${HOME_MOUNTS}/${mountname}/file`, BODY.submitted)
         
-        
+             
         const container =  await docker.createContainer({
             name: containername,
             Image: IMAGES_MAP.get(BODY.language.toLowerCase()),
@@ -55,15 +55,28 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
             Cmd: ["/bin/echo", "'Hello!'"],
         })
 
+        let finalStr: string = ""
 
-        const stream: NodeJS.ReadWriteStream  = await container.attach({stream: true, stdout: true, stderr: true})
-        stream.pipe(process.stdout)
-        await container.start({})
+        const stream: NodeJS.ReadWriteStream = await container.attach({stream: true, stdout: true, stderr: true})
+        stream.setEncoding('utf-8')        
 
-    
-        res.status(200).send({
-            response: "res"
+        container.start({})
+
+        stream.on("data", (chunk: string) => finalStr = finalStr.concat(chunk))
+
+        stream.on('error', () => {
+            res.status(500).send({
+                response: 'An error Happened during stdout reading'
+            })
         })
+
+        stream.on("end", () => {
+            res.status(200).send({
+                response: finalStr
+            })
+        })
+        
+        
     } catch(e) {
         res.status(500).send({
             message: "Could not handle request",
