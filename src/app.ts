@@ -1,5 +1,8 @@
 import 'dotenv/config'
-import { mkdir, rmdir, rm, writeFile } from 'fs/promises'
+import { mkdir, rmdir, rm, writeFile, open, FileHandle } from 'fs/promises'
+import { existsSync, WriteStream } from 'fs';
+import { PassThrough } from 'stream';
+import { randomUUID } from 'crypto';
 
 import express, { Express } from "express";
 
@@ -9,9 +12,8 @@ import Dockerode from 'dockerode'
 import bodyParser from 'body-parser';
 import cors from 'cors'
 import { checkDTO } from './middlewares/checkDTO';
-import { randomUUID } from 'crypto';
 import { ExerciseDTO } from './dto';
-import { existsSync } from 'fs';
+
 import { DockerInfos } from './dockerInfo';
 
 const app: Express = express();
@@ -49,7 +51,7 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
         const container =  await docker.createContainer({
             name: containername,
             Image: INFO.image,
-            Tty: true,
+            Tty: false,
             Env: INFO.env,
             AttachStderr : true,
             AttachStdout: true,
@@ -63,29 +65,45 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
             Entrypoint: INFO.entrypoint,
             Cmd: INFO.cmd 
         })
+       
+        await container.start({})
+        container.attach({stream: true, stdout: true, stderr: true}, async function (err, stream) {
+            if (err) throw new Error("Error during atachment");
 
-        let finalStr: string = ""
+            let bufOut: string = ""
+            let bufErr: string = ""
+    
+            let mystdout = new PassThrough()
+            let mystderr = new PassThrough()
 
-        const stream: NodeJS.ReadWriteStream = await container.attach({stream: true, stdout: true, stderr: true})
-        stream.setEncoding('utf-8')        
 
-        container.start({})
+            // to split the stream into stderr and stdout
+            container.modem.demuxStream(stream, mystdout, mystderr);
 
-        stream.on("data", (chunk: string) => finalStr = finalStr.concat(chunk))
+            stream.on("end", ()=> res.status(200).send({
+                response: bufOut,
+                consoleerror: bufErr 
+            }))
 
-        stream.on('error', () => {
-            res.status(500).send({
-                response: 'An error Happened during stdout reading'
+            mystdout.on("data", (chunk) => bufOut += chunk.toString())
+
+            mystderr.on("data", (chunk) => bufErr += chunk.toString())
+
+            mystdout.on('error', () => {
+                res.status(500).send({
+                    response: 'An error Happened during stdout reading'
+                })
+                throw new Error("Error when reading on stdout")
             })
-        })
 
-        stream.on("end", () => {
-            res.status(200).send({
-                response: finalStr
+            mystderr.on('error', () => {
+                res.status(500).send({
+                    response: 'An error Happened during stderr reading'
+                })
+                throw new Error("Error when reading on stderr")
             })
+            await container.wait()
         })
-        
-        
     } catch(e) {
         res.status(500).send({
             message: "Could not handle request",
