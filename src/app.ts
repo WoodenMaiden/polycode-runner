@@ -12,14 +12,21 @@ import { checkDTO } from './middlewares/checkDTO';
 import { randomUUID } from 'crypto';
 import { ExerciseDTO } from './dto';
 import { existsSync } from 'fs';
+import { DockerInfos } from './dockerInfo';
 
 const app: Express = express();
 
 const jsonparse = bodyParser.json()
 
 const HOME_MOUNTS = "/tmp/runners"
-const IMAGES_MAP = new Map<string, string> (
-    process.env.IMAGES.trim().split("|||").map((e: string) => e.split(';')) as Iterable<readonly [string, string]>
+
+const lang: string[][] = process.env.LANGUAGES.trim().split(" ").map((l: string): string[] => {
+    return [l].concat(process.env[l.toUpperCase()].trim().split(",, "))
+})
+
+
+const IMAGES_MAP: Map<string, DockerInfos> = new Map<string, DockerInfos>(
+    lang.map((l:string[]) => [l[0], new DockerInfos(l[0], l[1], l[2], l[3].slice(1, -1).split(", "), l[4].slice(1,-1).split(", "), l.slice(5))] ) as Iterable<readonly [string, DockerInfos]>
 )
 
 //app middlewares
@@ -33,15 +40,17 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
         const mountname = randomUUID()
         const containername = randomUUID()
 
+        const INFO: DockerInfos = IMAGES_MAP.get(BODY.language.toLowerCase())
+
         //we will bind mount the container to /tmp/runners/[its_id_generated_by_UUID]
         await mkdir(`${HOME_MOUNTS}/${mountname}`)
-        await writeFile(`${HOME_MOUNTS}/${mountname}/file`, BODY.submitted)
-        
-             
+        await writeFile(`${HOME_MOUNTS}/${mountname}/${INFO.filename}`, BODY.submitted)
+
         const container =  await docker.createContainer({
             name: containername,
-            Image: IMAGES_MAP.get(BODY.language.toLowerCase()),
+            Image: INFO.image,
             Tty: true,
+            Env: INFO.env,
             AttachStderr : true,
             AttachStdout: true,
             AttachStdin: true,
@@ -51,8 +60,8 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
                     `${HOME_MOUNTS}/${mountname}:/workdir`
                 ]
             },
-            Entrypoint: [],
-            Cmd: ["/bin/echo", "'Hello!'"],
+            Entrypoint: INFO.entrypoint,
+            Cmd: INFO.cmd 
         })
 
         let finalStr: string = ""
@@ -95,7 +104,7 @@ app.listen(process.env.PORT || 80, async () => {
 
     try {
         const PROMISES: Promise<any>[] = []
-        IMAGES_MAP.forEach(v => PROMISES.push(docker.pull(v)))
+        IMAGES_MAP.forEach(i => PROMISES.push(docker.pull(i.image)))
 
         console.log("Pulling images from dockerhub...")
         await Promise.all(PROMISES)
