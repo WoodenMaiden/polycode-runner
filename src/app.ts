@@ -34,7 +34,7 @@ const IMAGES_MAP: Map<string, DockerInfos> = new Map<string, DockerInfos>(
 //app middlewares
 app.use(cors())
 
-app.get('/', jsonparse, checkDTO, async (req, res) => {
+app.post('/', jsonparse, checkDTO, async (req, res) => {
     const BODY: ExerciseDTO = req.body
     try {
 
@@ -84,7 +84,7 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
             container.modem.demuxStream(stream, mystdout, mystderr);
 
             stream.on("end", async ()=> {
-                const COMPLETED: boolean = [bufOut] === BODY.expectedOutputs // TODO prendre en compte si on a plusieurs exercices
+                const COMPLETED: boolean = bufOut === BODY.expectedOutputs[0] // TODO prendre en compte si on a plusieurs exercices
                 res.status(200).send({
                     completed: COMPLETED,
                     response: bufOut,
