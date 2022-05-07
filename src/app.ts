@@ -11,7 +11,7 @@ import Dockerode from 'dockerode'
 //middlewares
 import bodyParser from 'body-parser';
 import cors from 'cors'
-import { checkDTO } from './middlewares/checkDTO';
+import { checkDTO } from './middlewares';
 import { ExerciseDTO } from './dto';
 
 import { DockerInfos } from './dockerInfo';
@@ -45,6 +45,9 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
         const INFO: DockerInfos = IMAGES_MAP.get(BODY.language.toLowerCase())
 
         //we will bind mount the container to /tmp/runners/[its_id_generated_by_UUID]
+        if (!existsSync(HOME_MOUNTS))
+            await mkdir(HOME_MOUNTS)
+            
         await mkdir(`${HOME_MOUNTS}/${mountname}`)
         await writeFile(`${HOME_MOUNTS}/${mountname}/${INFO.filename}`, BODY.submitted)
 
@@ -80,10 +83,14 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
             // to split the stream into stderr and stdout
             container.modem.demuxStream(stream, mystdout, mystderr);
 
-            stream.on("end", ()=> res.status(200).send({
-                response: bufOut,
-                consoleerror: bufErr 
-            }))
+            stream.on("end", async ()=> {
+                const COMPLETED: boolean = [bufOut] === BODY.expectedOutputs // TODO prendre en compte si on a plusieurs exercices
+                res.status(200).send({
+                    completed: COMPLETED,
+                    response: bufOut,
+                    consoleerror: bufErr 
+                })
+            })
 
             mystdout.on("data", (chunk) => bufOut += chunk.toString())
 
@@ -103,6 +110,7 @@ app.get('/', jsonparse, checkDTO, async (req, res) => {
                 throw new Error("Error when reading on stderr")
             })
             await container.wait()
+            await rm(`${HOME_MOUNTS}/${mountname}`, {recursive: true})
         })
     } catch(e) {
         res.status(500).send({

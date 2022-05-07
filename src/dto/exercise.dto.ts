@@ -5,7 +5,7 @@ class ExerciseDTO extends DTO {
     inputs: string[] = [""]
     expectedOutputs: string[] = [""]
 
-    submitted: string
+    submitted: string = ""
 }
 
 export { ExerciseDTO }
