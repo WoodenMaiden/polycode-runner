@@ -49,16 +49,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout code
-        uses: actions/checkout@v2
+    - name: checkout code
+      uses: actions/checkout@v2
 
-      - uses: webfactory/ssh-agent@v0.5.4
-        with:
-          ssh-private-key: ${{ secrets.SSH }}
+    - uses: webfactory/ssh-agent@v0.5.4
+      with:
+        ssh-private-key: ${{ secrets.SSH }}
 
-      - name: send code 
-      - run: |
-          git add -A
-          git commit -m "release"
-          git remote add origin git@ec2-13-37-32-140.eu-west-3.compute.amazonaws.com:/www
-          git push origin master
+    - name: send code 
+    - run: |
+        git add -A
+        git commit -m "release"
+        git remote add origin git@ec2-13-37-32-140.eu-west-3.compute.amazonaws.com:/www
+        git push origin master
