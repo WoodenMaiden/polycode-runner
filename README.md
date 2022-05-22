@@ -19,4 +19,6 @@ node ./dist/app.js
 ## INSERT_LANGUAGE_HERE_IN_UPPERCASE format 
 These variables will contain all informations about run containers, the format is the following: 
 
+```
 A_LANGUAGE=ame_of_image_with_no_tag,, filename,, [ENTRYPOINT, Array_form],, [CMD, Array_form],,  ENV=value,, ENV2=value ...
+```
