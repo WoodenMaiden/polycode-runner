@@ -121,10 +121,6 @@ app.post('/', jsonparse, checkDTO, async (req, res) => {
 }) 
 
 app.listen(process.env.PORT || 80, async () => {
-    if (!process.env.IMAGES) {
-        console.log("Please fill environment variables")
-        process.exit(1);
-    }
     const docker = new Dockerode();
     console.log(IMAGES_MAP)
 
